@@ -12,21 +12,27 @@
     /**
      * Sets up the communication to the screen.
      */
+var dir;
+		var mov = [];
+var moveArt = 0; // 0:+/-, 1: power
     function init() {
       airconsole = new AirConsole({"orientation": "portrait"});
 
       /*
        * Checks if this device is part of the active game.
        */
+		
       airconsole.onActivePlayersChange = function(player) {
-        var div = document.getElementById("player_id");
-		var mov = [document.getElementById("mov_1"), document.getElementById("mov_2")];
+        div = document.getElementById("player_id");
+		mov = [document.getElementById("mov_1"), document.getElementById("mov_2")];
         if (player !== undefined) {
-          div.innerHTML =  (["lerf right", "up down"][player]);
-		  mov[0].innerHTML = ["left", "up"][player];
-		  mov[1].innerHTML = ["right", "down"][player];
+          div.innerHTML =  (["lerf right", "up down", "faster slower"][player]);
+		  mov[0].innerHTML = ["left", "up", "fast"][player];
+		  mov[1].innerHTML = ["right", "down", "slow"][player];
+		  if(player === 0 || player === 1) moveArt = 0;
+		  if(player === 2) moveArt = 1;
         } else {
-          div.innerHTML = "It's a 2 player game!";
+          div.innerHTML = "It's a 3 player game!";
         }
       };
 
@@ -45,8 +51,15 @@
      * Tells the screen to move the paddle of this player.
      * @param amount
      */
-    function move(amount) {
-      airconsole.message(AirConsole.SCREEN, {move: amount})
+	var power = 25;
+    function move(dir) {	
+	  if(moveArt === 0)
+		airconsole.message(AirConsole.SCREEN, {move: dir});
+      if(moveArt === 1) {
+			power -= dir * 5;
+			div.innerHTML = "speed: " + power;
+			airconsole.message(AirConsole.SCREEN, {power: power });
+		}
     }
 
   </script>
@@ -94,13 +107,13 @@
 </head>
 <body onload="init()">
 <div style="height: 1%"></div>
-<div class=button ontouchstart="move(-50)" ontouchend="move(0)" onmousedown="move(-50)" onmouseup="move(0)">
+<div class=button ontouchstart="move(-1)" ontouchend="move(0)" onmousedown="move(-1)" onmouseup="move(0)">
   <div class="button_label" id="mov_1">UP</div>
 </div>
 <div style="height: 8%"></div>
-<div class=button ontouchstart="move(50)" ontouchend="move(0)" onmousedown="move(50)" onmouseup="move(0)">
+<div class=button ontouchstart="move(1)" ontouchend="move(0)" onmousedown="move(1)" onmouseup="move(0)">
   <div class="button_label" id="mov_2">DOWN</div>
 </div>
-<div id="player_id">It's a 2 player game</div>
+<div id="player_id">It's a 3 player game</div>
 </body>
 </html>
