@@ -2,14 +2,25 @@
   <head>
     <script type="text/javascript" src="https://www.airconsole.com/api/airconsole-1.3.0.js"></script>
     <script type="text/javascript">
+	  const spawnRate = 0.25;
+	  const maxAstros = 10;
       var airconsole;
       var player;
       var canvas;
       var last = null;
       var score_el;
 	  var startTime = null;
-      const mProjection = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-
+      const mProjection = [1.0722534656524658, 0, 0, 0, 0, 2.1445069313049316, 0, 0, 0, 0, -1, -1, 0, 0, 0, 0];
+	  function project(p, m = mProjection) {
+			p =  {
+				x: p.x * m[0] + p.y * m[1] + p.z * m[2] + m[3],
+				y: p.x * m[4] + p.y * m[5] + p.z * m[6] + m[7],
+				z: p.x * m[8] + p.y * m[9] + p.z * m[10] + m[11],
+			};
+			p.x /= Math.abs(p.z);
+			p.y /= Math.abs(p.z);
+			return p;
+		}
       /**
        * Sets up the communication to game pads.
        */
@@ -30,11 +41,16 @@
 
         airconsole.onMessage = function(device_id, data) {
           var p_id = airconsole.convertDeviceIdToPlayerNumber(device_id);
-          if (p_id != undefined && data.move !== undefined) {
-			if (startTime === null) startGame();
-			if (p_id === 0) player.move.x = data.move;
-			else player.move.y = data.move;
-          
+          if (p_id != undefined && startTime !== null){
+			if(data.move !== undefined) {
+				if (startTime === null) startGame();
+				if (p_id === 0) player.move.x = data.move;
+				else player.move.y = data.move ;
+			}
+			if(data.power !== undefined) {
+				player.a = data.power;
+			}
+          }
         };
 
       }
@@ -51,10 +67,10 @@
         var connected_controllers = airconsole.getControllerDeviceIds();
         // Only update if the game didn't have active players.
         if (active_players.length == 0) {
-          if (connected_controllers.length >= 2) {
+          if (connected_controllers.length >= 3) {
             // Enough controller devices connected to start the game.
             // Setting the first 2 controllers to active players.
-            airconsole.setActivePlayers(2);
+            airconsole.setActivePlayers(3);
             score = 0;
             score_el.innerHTML = score;
             document.getElementById("wait").innerHTML = "";
@@ -92,7 +108,7 @@
 
         canvas = document.getElementById("canvas");
         score_el = document.getElementById("score");
-        player = { pos: {x: 100, y: 50}, move: {x: 0, y: 0 }};
+        player = { pos: {x: 100, y: 50}, move: {x: 0, y: 0 }, vel: {x: 0, y: 0}, a: 25};
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
 		setupProj(canvas.width, canvas.height);
@@ -104,38 +120,57 @@
       class Astroid {
 			// pos = {x,y,z}, speed = {x,y,z}
 			constructor(size, pos, speed) {
-				this.size = size;
+				this.r = size * 0.5 * 0.01;
 				this.pos = pos;
 				this.speed = speed;
 			}
 			update(delta) {
-				pos.x += speed.x * delta;
-				pos.y += speed.y * delta;
-				pos.z += speed.z * delta;
+				this.pos.x += this.speed.x * delta;
+				this.pos.y += this.speed.y * delta;
+				this.pos.z += this.speed.z * delta;
+			}
+			draw(ctx, c) {
+					const pMin = project({x:  this.pos.x - this.r, y: this.pos.y - this.r, z: this.pos.z});
+					const pMax = project({x: this.pos.x  + this.r, y: this.pos.y + this.r,z: this.pos.z});
+					pMin.x = pMin.x * 100  + 100;
+					if(pMin.x < 0) pMin.x = 0;
+					pMin.y = pMin.y * 50  + 50;
+					if(pMin.y < 0) pMin.y = 0;
+					pMax.x = pMax.x * 100  + 100;
+					if(pMax.x < 0) pMax.x =  0;
+					pMax.y = pMax.y * 50  + 50;
+					if(pMax.y < 0) pMax.y = 0;
+
+					ctx.fillRect(c(pMin.x), c(pMin.y), c(pMax.x - pMin.x), c(pMax.y - pMin.y));
 			}
 		}
       function updatePos(entity, delta) {
-        entity.pos.x += entity.move.x*delta;
-        entity.pos.y += entity.move.y*delta;
+		entity.vel.x += entity.move.x * delta * entity.a;
+		entity.vel.y += entity.move.y * delta * entity.a;
+        entity.pos.x += entity.vel.x * delta;
+        entity.pos.y += entity.vel.y * delta;
       }
 		const astroids = {
 			update: function(delta) {
-				data.forEach(function(d) { d.update(delta); });
+				const rem = [];
+				this.data.forEach(function(d, i) { d.update(delta);});
+				this.data = this.data.filter(function(d) { return d.pos.z > 0;})
 			},
-			proj: mProjection,
-			add: function(obj) {this.data.push(obj);},
+			add: function(obj) { if (this.data.length < maxAstros) this.data.push(obj);},
 			draw: function(ctx, c) {
-				
+					this.data.forEach(function(e){ e.draw(ctx, c);});
 			},
 			data: []
 		};
 		const astroidFactory = {
 			spawn: function() {
-				astroids.add(new Astroid(10, {x: 0, y: 0, z: 100}, {x: 0, y: 0, z: 10}));
+				const x = Math.random() * 2.0 - 1.0;
+				const y = Math.random() - 0.5;
+				astroids.add(new Astroid(30, {x: x, y: y, z: 1}, {x: 0, y: 0, z: -0.2}));
 			},
 			astroids: astroids,
 		};
-       const scoreUpdate = {t: 0.1, interval: 0.1, f: function() {
+       const scoreUpdate = {t: 0.1, interval: 0.1, f: function() { 
 			displayScore((new Date().getTime() -  startTime) * 0.001);
 		}};
        const timer = [scoreUpdate];
@@ -148,11 +183,13 @@
         last = now;
         draw(true);
         updatePos(player, delta);
-        
-		if(Math.random() > 0.8) {
+		astroids.update(delta);
+
+		if(Math.random() > 1.0 - (spawnRate* delta)) {
 				astroidFactory.spawn();
 		}
-
+		
+		if(startTime)
         timer.forEach(function(t) {
 			t.t -= delta;
 			if (t.t <= 0) {
@@ -162,8 +199,19 @@
 		});
 
         // paddle limit
-        player.pos.y = Math.min(Math.max(10, player.pos.y), 90);
-		player.pos.x = Math.min(Math.max(10, player.pos.x),190);
+        const padding = 10;
+		if  (player.pos.x < padding) {
+			if(player.vel.x < 0)player.vel.x = -player.vel.x;
+		} else if (player.pos.x > 200 - padding) {
+			if(player.vel.x > 0)player.vel.x = - player.vel.x;
+		}
+
+		if (player.pos.y < padding) {
+			if(player.vel.y < 0) player.vel.y = - player.vel.y;
+		} else if (player.pos.y > 100 - padding) {
+			if(player.vel.y> 0)player.vel.y = -player.vel.y;
+		}
+		
 		
         draw();
 
@@ -171,7 +219,7 @@
       }
 
 	function setupProj(w, h, foV = 45.0) {
-
+			// not needed now
 	}
 	
       /**
@@ -202,10 +250,11 @@
           x *= zoom;
           return x | 0; // round
         }
-        ctx.fillStyle = clear ? 'black' : 'white';
+		ctx.fillStyle = clear ? 'black' : 'red';
+		astroids.draw(ctx, c);
+		ctx.fillStyle = clear ? 'black' : 'white';
         ctx.fillRect(c(player.pos.x - 5),c(player.pos.y - 5),
                      c(10), c(10));
-		astroids.draw(ctx, c);
       }
     </script>
     <style type="text/css">
