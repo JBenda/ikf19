@@ -8,8 +8,17 @@
       var last = null;
       var score_el;
 	  var startTime = null;
-      const mProjection = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-
+      const mProjection = [1.0722534656524658, 0, 0, 0, 0, 2.1445069313049316, 0, 0, 0, 0, -1, -1, 0, 0, 0, 0];
+	  function project(p, m = mProjection) {
+			p =  {
+				x: p.x * m[0] + p.y * m[1] + p.z * m[2] + m[3],
+				y: p.x * m[4] + p.y * m[5] + p.z * m[6] + m[7],
+				z: p.x * m[8] + p.y * m[9] + p.z * m[10] + m[11],
+			};
+			p.x /= Math.abs(p.z);
+			p.y /= Math.abs(p.z);
+			return p;
+		}
       /**
        * Sets up the communication to game pads.
        */
@@ -104,14 +113,34 @@
       class Astroid {
 			// pos = {x,y,z}, speed = {x,y,z}
 			constructor(size, pos, speed) {
-				this.size = size;
+				this.r = size * 0.5 * 0.01;
 				this.pos = pos;
 				this.speed = speed;
 			}
 			update(delta) {
-				pos.x += speed.x * delta;
-				pos.y += speed.y * delta;
-				pos.z += speed.z * delta;
+				this.pos.x += this.speed.x * delta;
+				this.pos.y += this.speed.y * delta;
+				this.pos.z += this.speed.z * delta;
+			}
+			draw(ctx, c) {
+					const pMin = project({x:  this.pos.x - this.r, y: this.pos.y - this.r, z: this.pos.z});
+					const pMax = project({x: this.pos.x  + this.r, y: this.pos.y + this.r,z: this.pos.z});
+					pMin.x = pMin.x * 100  + 100;
+					if(pMin.x < 0) pMin.x = 0;
+					pMin.y = pMin.y * 50  + 50;
+					if(pMin.y < 0) pMin.y = 0;
+					pMax.x = pMax.x * 100  + 100;
+					if(pMax.x < 0) pMax.x =  0;
+					pMax.y = pMax.y * 50  + 50;
+					if(pMax.y < 0) pMax.y = 0;
+
+					ctx.beginPath();		
+					ctx.moveTo(c(pMin.x), c(pMin.y));
+					ctx.lineTo(c(pMax.x), c(pMin.y));
+					ctx.lineTo(c(pMax.x), c(pMax.y));
+					ctx.lineTo(c(pMin.x), c(pMax.y));
+					ctx.closePath();
+					ctx.fill();
 			}
 		}
       function updatePos(entity, delta) {
@@ -120,22 +149,23 @@
       }
 		const astroids = {
 			update: function(delta) {
-				data.forEach(function(d) { d.update(delta); });
+				const rem = [];
+				this.data.forEach(function(d, i) { d.update(delta);});
+				this.data = this.data.filter(function(d) { return d.pos.z > 0;})
 			},
-			proj: mProjection,
-			add: function(obj) {this.data.push(obj);},
+			add: function(obj) { if (this.data.length < 2) this.data.push(obj);},
 			draw: function(ctx, c) {
-				
+					this.data.forEach(function(e){ e.draw(ctx, c);});
 			},
 			data: []
 		};
 		const astroidFactory = {
 			spawn: function() {
-				astroids.add(new Astroid(10, {x: 0, y: 0, z: 100}, {x: 0, y: 0, z: 10}));
+				astroids.add(new Astroid(30, {x: -0.5, y: 0, z: 1}, {x: 0, y: 0, z: -0.2}));
 			},
 			astroids: astroids,
 		};
-       const scoreUpdate = {t: 0.1, interval: 0.1, f: function() {
+       const scoreUpdate = {t: 0.1, interval: 0.1, f: function() { 
 			displayScore((new Date().getTime() -  startTime) * 0.001);
 		}};
        const timer = [scoreUpdate];
@@ -148,11 +178,13 @@
         last = now;
         draw(true);
         updatePos(player, delta);
-        
+		astroids.update(delta);
+
 		if(Math.random() > 0.8) {
 				astroidFactory.spawn();
 		}
-
+		
+		if(startTime)
         timer.forEach(function(t) {
 			t.t -= delta;
 			if (t.t <= 0) {
@@ -171,7 +203,7 @@
       }
 
 	function setupProj(w, h, foV = 45.0) {
-
+			// not needed now
 	}
 	
       /**
@@ -205,6 +237,7 @@
         ctx.fillStyle = clear ? 'black' : 'white';
         ctx.fillRect(c(player.pos.x - 5),c(player.pos.y - 5),
                      c(10), c(10));
+		ctx.fillStyle = clear ? 'black' : 'red';
 		astroids.draw(ctx, c);
       }
     </script>
