@@ -33,7 +33,11 @@
         airconsole.onMessage = function(device_id, data) {
           var player = airconsole.convertDeviceIdToPlayerNumber(device_id);
           if (player != undefined && data.move !== undefined) {
-            paddles[player].move.y = data.move;
+			if (player === 0) {
+				// paddles[0].move.x = data.move;
+			} else {
+				// paddles[0].move.y = data.move;
+			}
           }
         };
 
