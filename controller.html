@@ -20,8 +20,11 @@
        */
       airconsole.onActivePlayersChange = function(player) {
         var div = document.getElementById("player_id");
+		var mov = [document.getElementById("mov_1"), document.getElementById("mov_2")];
         if (player !== undefined) {
           div.innerHTML =  (["lerf right", "up down"][player]);
+		  mov[0].innerHTML = ["left", "up"][player];
+		  mov[1].innerHTML = ["right", "down"][player];
         } else {
           div.innerHTML = "It's a 2 player game!";
         }
@@ -92,11 +95,11 @@
 <body onload="init()">
 <div style="height: 1%"></div>
 <div class=button ontouchstart="move(-50)" ontouchend="move(0)" onmousedown="move(-50)" onmouseup="move(0)">
-  <div class="button_label">UP</div>
+  <div class="button_label" id="mov_1">UP</div>
 </div>
 <div style="height: 8%"></div>
 <div class=button ontouchstart="move(50)" ontouchend="move(0)" onmousedown="move(50)" onmouseup="move(0)">
-  <div class="button_label">DOWN</div>
+  <div class="button_label" id="mov_2">DOWN</div>
 </div>
 <div id="player_id">It's a 2 player game</div>
 </body>
