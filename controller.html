@@ -1,68 +1,6 @@
 <html>
 <head>
-  <script type="text/javascript"
-          src="https://www.airconsole.com/api/airconsole-1.3.0.js"></script>
-  <script type="text/javascript">
-    navigator.vibrate = (navigator.vibrate ||
-                         navigator.webkitVibrate ||
-                         navigator.mozVibrate ||
-                         navigator.msVibrate);
-
-    var airconsole;
-    /**
-     * Sets up the communication to the screen.
-     */
-var dir;
-		var mov = [];
-var moveArt = 0; // 0:+/-, 1: power
-    function init() {
-      airconsole = new AirConsole({"orientation": "portrait"});
-
-      /*
-       * Checks if this device is part of the active game.
-       */
-		
-      airconsole.onActivePlayersChange = function(player) {
-        div = document.getElementById("player_id");
-		mov = [document.getElementById("mov_1"), document.getElementById("mov_2")];
-        if (player !== undefined) {
-          div.innerHTML =  (["lerf right", "up down", "faster slower"][player]);
-		  mov[0].innerHTML = ["left", "up", "fast"][player];
-		  mov[1].innerHTML = ["right", "down", "slow"][player];
-		  if(player === 0 || player === 1) moveArt = 0;
-		  if(player === 2) moveArt = 1;
-        } else {
-          div.innerHTML = "It's a 3 player game!";
-        }
-      };
-
-      /*
-       * Makes the device vibrate if the screen says so.
-       */
-      airconsole.onMessage = function(from, data) {
-        if (from == AirConsole.SCREEN && data.vibrate) {
-          navigator.vibrate(data.vibrate);
-          console.log("Vibrating: " + data.vibrate);
-        }
-      };
-    }
-
-    /**
-     * Tells the screen to move the paddle of this player.
-     * @param amount
-     */
-	var power = 25;
-    function move(dir) {	
-	  if(moveArt === 0)
-		airconsole.message(AirConsole.SCREEN, {move: dir});
-      if(moveArt === 1) {
-			power -= dir * 5;
-			div.innerHTML = "speed: " + power;
-			airconsole.message(AirConsole.SCREEN, {power: power });
-		}
-    }
-
-  </script>
+  <script type="text/javascript" src="https://www.airconsole.com/api/airconsole-1.3.0.js"></script>
   <style type="text/css">
     @font-face {
       font-family: 'PressStart2P';
@@ -104,8 +42,106 @@ var moveArt = 0; // 0:+/-, 1: power
       color: #777;
     }
   </style>
-</head>
-<body onload="init()">
+<script type="text/javascript">
+    navigator.vibrate = (navigator.vibrate ||
+                         navigator.webkitVibrate ||
+                         navigator.mozVibrate ||
+                         navigator.msVibrate);
+
+    var airconsole;
+    /**
+     * Sets up the communication to the screen.
+     */
+var dir;
+		var mov = [];
+var moveArt = 0; // 0:+/-, 1: power
+async function setUpMic() {
+		try {
+				var stream = await navigator.mediaDevices.getUserMedia({audio:true});
+				soundAllowed(stream);
+			} catch (err) {
+				soundDenied(err);
+			}
+}
+
+    function init() {
+      airconsole = new AirConsole({"orientation": "portrait"});
+
+      /*
+       * Checks if this device is part of the ctive game.
+       */
+		
+      airconsole.onActivePlayersChange = function(player) {
+        div = document.getElementById("player_id");
+		mov = [document.getElementById("mov_1"), document.getElementById("mov_2")];
+        if (player !== undefined) {
+          div.innerHTML =  (["lerf right", "up down", "faster slower"][player]);
+		  mov[0].innerHTML = ["left", "up", "fast"][player];
+		  mov[1].innerHTML = ["right", "down", "slow"][player];
+		  if(player === 0 || player === 1) moveArt = 0;
+		  if(player === 2) {
+			moveArt = 1;
+			setUpMic();
+			}
+        } else {
+          div.innerHTML = "It's a 3 player game!";
+        }
+      };
+
+      /*
+       * Makes the device vibrate if the screen says so.
+       */
+      airconsole.onMessage = function(from, data) {
+        if (from == AirConsole.SCREEN && data.vibrate) {
+          navigator.vibrate(data.vibrate);
+          console.log("Vibrating: " + data.vibrate);
+        }
+      };
+    }
+
+    /**
+     * Tells the screen to move the paddle of this player.
+     * @param amount
+     */
+	var power = 25;
+    function move(dir) {	
+	  if(moveArt === 0)
+		airconsole.message(AirConsole.SCREEN, {move: dir});
+	  if(moveArt === 1) {
+		airconsole.message(AirConsole.SCREEN, {power: 0.5});
+	  }
+    }
+	var max = 1024;
+	function soundAllowed (stream) {
+		console.log("allow sound");
+		window.persistAudioStream = stream;
+		div.innerHTML = "0";
+		var aCtx = new AudioContext();
+		var aStream = aCtx.createMediaStreamSource(stream);
+		var analyzer = aCtx.createAnalyser();
+		aStream.connect(analyzer);
+		analyzer.fftSize = 1024;
+		var freqArray = new Uint8Array(analyzer.frequencyBinCount);
+		const updateMic = function() {
+			analyzer.getByteFrequencyData(freqArray);
+			var sum = 0;
+			for(var i = 0; i < 255; i++) {
+				sum += Math.floor(freqArray[i]);
+			}
+			if (sum > max) max = sum;
+			div.innerHTML = Math.floor(sum / max * 100.0);
+			airconsole.message(AirConsole.SCREEN, {power: power > 25 ?  0.5 : sum / max });
+		}
+		setInterval(updateMic, 200);
+	}
+	function soundDenied(error) {
+		console.log(error + "doof");
+		// airconsole.message(AirConsole.SCREEN, {power: 0.5});
+		div.innerHTML = "you must enable your mic";
+	}
+  </script>
+  </head>
+  <body onload="init()">
 <div style="height: 1%"></div>
 <div class=button ontouchstart="move(-1)" ontouchend="move(0)" onmousedown="move(-1)" onmouseup="move(0)">
   <div class="button_label" id="mov_1">UP</div>
