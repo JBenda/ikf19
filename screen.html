@@ -7,10 +7,10 @@
 	<script type="text/javascript" src="gl.js"></script>
     <script type="text/javascript">
 	  const neededControls = 3;
-	  const spawnRate = 1;
-	  const maxAstros = 1;
+	  const spawnRate = 0.6;
+	  const maxAstros = 8;
 	  const maxA = 50;
-	  const startLife = 3;
+	  const startLife = 1;
 	  const shakeTime = 1;
 	  const shakeAmplitude = 50;
 	  var remainingTime = 0;
@@ -23,11 +23,35 @@
 	  var life;
 	  var life_el;
 	  var scene;
+	  var noise;
+	  var aim;
 	  const astroidImages = [];
       const mProjection = [1.0722534656524658, 0, 0, 0, 0, 2.1445069313049316, 0, 0, 0, 0, -1, -1, 0, 0, 0, 0];
 	  mat4.perspective(mProjection, 45 * Math.PI / 180, 2, 0, 20);
 	  var gl;
 	  var gl_c;
+	  function updateLife() {
+		life_el.innerHTML = ((life / startLife) * 100).toFixed(0) + "❤";
+		noise.style.opacity = 1.0 - (life / startLife);
+		if (life === 0) {
+			stopGame();
+		}
+	  }
+	  function stopGame() {
+		startTime = null;
+		aim.style.display="none";
+		
+		score_el.style.top = "50%";
+        score_el.style.left="0px";
+		score_el.style.margin.top = "0";
+        score_el.style.width = "100%";
+		score_el.style.marginTop  = "-67pt";
+		score_el.style.align = "center";
+		score_el.style.height = "100%";
+		score_el.style.fontSize ="134pt";
+		
+		life_el.style.display = "none";
+	  }
 	  function project(p, m = mProjection) {
 			p =  {
 				x: p.x * m[0] + p.y * m[1] + p.z * m[2] + m[3],
@@ -60,9 +84,9 @@
 
       }
 	  function onAMessage(device_id, data) {
-		  // if (airconsole.getActivePlayerDeviceIds().length === 0) return;
-          // var p_id = airconsole.convertDeviceIdToPlayerNumber(device_id);
-		  var p_id = device_id;
+		  if (airconsole.getActivePlayerDeviceIds().length === 0) return;
+          var p_id = airconsole.convertDeviceIdToPlayerNumber(device_id);
+		  // var p_id = device_id;
           if (p_id != undefined){
 			if(data.move !== undefined) {
 				if (startTime === null) startGame();
@@ -76,13 +100,17 @@
         }
 
 	function startGame() {
+		aim.style.display = "block";
 		startTime = new Date().getTime();
 		life = startLife;
-		life_el.innerHTML = life.toFixed(0) + " ❤";
-		showlife();
-	}
-	function showlife() {
-		life_el.innerHTML = life.toFixed(0) + " ❤";
+		score_el.style.top = "5%";
+        score_el.style.left="1%";
+		score_el.style.marginTop = "0";
+        score_el.style.width = "10%";
+        score_el.style.fontSize  = "24px";
+		score_el.style.align = "left";
+		life_el.style.display="block";
+		updateLife();
 	}
       /**
        * Checks if two players are connected!
@@ -126,7 +154,8 @@
        */
       function init() {
 		setupConsole();
-	  
+		noise = document.getElementById("noise");
+		aim = document.getElementById("aim");
 		document.addEventListener('keydown', function(e) {
 			const kN = e.key;
 			if (kN === "ArrowUp") onAMessage(1, {move: -1});
@@ -185,9 +214,9 @@
 				const p = {x: Math.floor(this.pos.x * 100 + 100 - player.pos.x), y: Math.floor(this.pos.y * 50 + 50 - player.pos.y)};
 				const r = this.r * 100;
 				if (Math.abs(p.x) <= 5 + r && Math.abs(p.y) <= 5 + r) {
-					if (startGame !== null) {
+					if (startTime !== null) {
 						life --;
-						life_el.innerHTML = life.toFixed(0) + "❤";
+						updateLife();
 					}
 					startShake();
 				}
@@ -204,8 +233,9 @@
 					mat4.fromScaling(mView, v);
 					mat4.translate(mView, mView, [(this.pos.x - px) / this.r, -(this.pos.y - py) / this.r, -this.pos.z ]);
 					prog.draw(mProjection, mView);
-					ctx.fillStyle = "rgba(255, 0, 0, " + (1.0 - this.pos.z / 20.0)+ ")";
-					ctx.fillRect(c(this.pos.x * 100 + 100 - this.r * 100), c(this.pos.y * 50 + 50 - this.r*100), c(this.r * 100 * 2), c(this.r * 100 * 2));
+					// hit area
+					// ctx.fillStyle = "rgba(255, 0, 0, " + (1.0 - this.pos.z / 20.0)+ ")";
+					// ctx.fillRect(c(this.pos.x * 100 + 100 - this.r * 100), c(this.pos.y * 50 + 50 - this.r*100), c(this.r * 100 * 2), c(this.r * 100 * 2));
 			}
 		}
       function updatePos(entity, delta) {
@@ -365,7 +395,7 @@
         position: relative;
       }
 
-      canvas {
+      .layer {
         position: absolute;
         top: 0px;
         left:0px;
@@ -415,8 +445,9 @@
   </head>
   <body onload="init()">
     <div class="game">
-		<canvas id="canvas"></canvas>
-	  <canvas id="2d"></canvas>
+		<canvas class="layer" id="canvas"></canvas>
+	  <canvas class="layer" id="2d"></canvas>
+	  <img class="layer" id="noise" src="assets/staticTv.gif" style="opacity:0;"/>
       <div id="score">START</div>
 	  <div id="life">3❤</div>
       <div id="wait"></div>
