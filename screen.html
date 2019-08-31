@@ -1,11 +1,14 @@
 <html>
   <head>
 	<meta charset="UTF-8"/>
+	<script src="gl-matrix.js"></script>
+	<script src="webgl-debug.js"></script>
     <script type="text/javascript" src="https://www.airconsole.com/api/airconsole-1.3.0.js"></script>
+	<script type="text/javascript" src="gl.js"></script>
     <script type="text/javascript">
 	  const neededControls = 3;
-	  const spawnRate = 0.5;
-	  const maxAstros = 10;
+	  const spawnRate = 1;
+	  const maxAstros = 1;
 	  const maxA = 50;
 	  const startLife = 3;
 	  const shakeTime = 1;
@@ -19,7 +22,11 @@
 	  var startTime = null;
 	  var life;
 	  var life_el;
+	  var scene;
+	  const astroidImages = [];
       const mProjection = [1.0722534656524658, 0, 0, 0, 0, 2.1445069313049316, 0, 0, 0, 0, -1, -1, 0, 0, 0, 0];
+	  var gl;
+	  var gl_c;
 	  function project(p, m = mProjection) {
 			p =  {
 				x: p.x * m[0] + p.y * m[1] + p.z * m[2] + m[3],
@@ -48,7 +55,11 @@
           checkTwoPlayers();
         };
 
-        airconsole.onMessage = function(device_id, data) {
+        airconsole.onMessage = onAMessage;
+
+      }
+	  function onAMessage(device_id, data) {
+		  if (airconsole.getActivePlayerDeviceIds().length === 0) return;
           var p_id = airconsole.convertDeviceIdToPlayerNumber(device_id);
           if (p_id != undefined){
 			if(data.move !== undefined) {
@@ -60,13 +71,12 @@
 				player.a = data.power * maxA;
 			}
           }
-        };
-
-      }
+        }
 
 	function startGame() {
 		startTime = new Date().getTime();
 		life = startLife;
+		life_el.innerHTML = life.toFixed(0) + " ❤";
 		showlife();
 	}
 	function showlife() {
@@ -113,17 +123,38 @@
        * body.onload function.
        */
       function init() {
-        setupConsole();
+		setupConsole();
+	  
+		document.addEventListener('keydown', function(e) {
+			const kN = e.key;
+			if (kN === "ArrowUp") onAMessage(1, {move: -1});
+			else if(kN  === "ArrowDown") onAMessage(1, {move: 1});
+			else if (kN === "ArrowLeft") onAMessage(0, {move: -1});
+			else if (kN === "ArrowRight") onAMessage(0, {move: 1});
+		});
+		document.addEventListener('keyup', function(e) {
+			const kN = e.key;
+			if (kN === 'ArrowUp' || kN === 'ArrowDown') onAMessage(1, {move: 0});
+			else if (kN === "ArrowLeft" || kN === "ArrowRight") onAMessage(0, {move: 0});
+		});
+	  
 		power = document.getElementById("power");
 		life_el = document.getElementById("life");
-        // Setting up the game. Nothing AirConsole specific.
+		astroidImages[0] = document.getElementById("astroid1");
+        
 
-        canvas = document.getElementById("canvas");
+        canvas = document.getElementById("2d");
+		gl_c = document.getElementById("canvas");
+		gl =WebGLDebugUtils.makeDebugContext(gl_c.getContext("webgl"));
         score_el = document.getElementById("score");
         player = { pos: {x: 100, y: 50}, move: {x: 0, y: 0 }, vel: {x: 0, y: 0}, a: 25};
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
 		setupProj(canvas.width, canvas.height);
+		
+		scene = setupScene(gl);
+		astroids.prog = setupAstroid(gl, {astroid1: astroidImages[0]});
+		
         window.onresize = (clearCanvas);
         last = new Date().getTime();
         loop();
@@ -137,10 +168,11 @@
 		}
       class Astroid {
 			// pos = {x,y,z}, speed = {x,y,z}
-			constructor(size, pos, speed) {
+			constructor(size, pos, speed, pId) {
 				this.r = size * 0.5 * 0.01;
 				this.pos = pos;
 				this.speed = speed;
+				this.img = astroidImages[pId];
 			}
 			update(delta) {
 				this.pos.x += this.speed.x * delta;
@@ -151,24 +183,27 @@
 				const p = {x: Math.floor(this.pos.x * 100 + 100 - player.pos.x), y: Math.floor(this.pos.y * 50 + 50 - player.pos.y)};
 				const r = this.r * 100;
 				if (Math.abs(p.x) <= 5 + r && Math.abs(p.y) <= 5 + r) {
-					life --;
-					life_el.innerHTML = life.toFixed(0) + "❤";
+					if (startGame !== null) {
+						life --;
+						life_el.innerHTML = life.toFixed(0) + "❤";
+					}
 					startShake();
 				}
 			}
-			draw(ctx, c) {
-					const pMin = project({x:  this.pos.x - this.r, y: this.pos.y - this.r, z: this.pos.z});
-					const pMax = project({x: this.pos.x  + this.r, y: this.pos.y + this.r,z: this.pos.z});
-					pMin.x = pMin.x * 100  + 100;
-					if(pMin.x < 0) pMin.x = 0;
-					pMin.y = pMin.y * 50  + 50;
-					if(pMin.y < 0) pMin.y = 0;
-					pMax.x = pMax.x * 100  + 100;
-					if(pMax.x < 0) pMax.x =  0;
-					pMax.y = pMax.y * 50  + 50;
-					if(pMax.y < 0) pMax.y = 0;
+			draw(prog) {
+					const mView = mat4.create();
+					const mCam = mat4.create();
 
-					ctx.fillRect(c(pMin.x), c(pMin.y), c(pMax.x - pMin.x), c(pMax.y - pMin.y));
+					const v = vec3.create();
+					const px = (player.pos.x - 100.0) / 100.0;
+					const py = (player.pos.y - 50.0) / 50.0;
+					vec3.set(v, this.r /2.0, this.r / 2.0, 1);
+					mat4.targetTo(mView, [player.pos.x, player.pos.y, player.pos.z], [this.pos.x, this.pos.y, this.pos.z], [0, 1, 0]);
+					mat4.fromScaling(mView, v);
+					mat4.translate(mView, mView, [this.pos.x - px, -(this.pos.y - py), -this.pos.z]);
+					prog.draw(mProjection, mView);
+					ctx.fillStyle = "rgba(255, 0, 0, " + (1.0 - this.pos.z)+ ")";
+					ctx.fillRect(c(this.pos.x * 100 + 100 - this.r * 100), c(this.pos.y * 50 + 50 - this.r*100), c(this.r * 100 * 2), c(this.r * 100 * 2));
 			}
 		}
       function updatePos(entity, delta) {
@@ -179,23 +214,27 @@
       }
 		const astroids = {
 			update: function(delta) {
-				const rem = [];
+				const rem = [];	
 				this.data.forEach(function(d, i) { d.update(delta);});
 				const potHits = this.data.filter(function(d) {return d.pos.z <= 0;});
 				this.data = this.data.filter(function(d) { return d.pos.z > 0;})
 				potHits.forEach(function(e) {e.handleCollision(player);})
 			},
 			add: function(obj) { if (this.data.length < maxAstros) this.data.push(obj);},
-			draw: function(ctx, c) {
-					this.data.forEach(function(e){ e.draw(ctx, c);});
+			draw: function() {
+					const prog = this.prog;
+					this.data.reverse().forEach(function(e){e.draw(prog);});
+					this.data.reverse();
 			},
+			prog: undefined,
 			data: []
 		};
 		const astroidFactory = {
 			spawn: function() {
+				console.log("new astroid");
 				const x = Math.random() * 2.0 - 1.0;
 				const y = Math.random() - 0.5;
-				astroids.add(new Astroid(30, {x: x, y: y, z: 1}, {x: 0, y: 0, z: -0.2}));
+				astroids.add(new Astroid(30, {x: x, y: y, z: 1}, {x: 0, y: 0, z: -0.2}, 0));
 			},
 			astroids: astroids,
 		};
@@ -213,7 +252,10 @@
 			if(remainingTime <= 0) stopShake();
 		}
         last = now;
-		draw(true);
+		
+		scene.clear();
+		clearCanvas();
+		
         updatePos(player, delta);
 		astroids.update(delta);
 
@@ -267,13 +309,10 @@
        * @param move_x
        * @param move_y
        */
+	   var pro = null;
       function clearCanvas() {
-        var ctx = canvas.getContext("2d");
-        ctx.fillStyle = "black";
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
-		setupProj(canvas.width, canvas.height);
-        ctx.fillRect(0,0, canvas.width, canvas.height);
+		if (ctx === null) ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
 
       /**
@@ -281,21 +320,24 @@
        * Drawing the game scene. Nothing Game Console specific.
        */
 		var ctx = null;
+		var pos;
+		var uv;
+		var c;
       function draw(clear) {
         // Draw
 		if (ctx === null)
 			ctx = canvas.getContext("2d");
         var zoom = canvas.clientHeight / 100;
-        function c(x) {
+        c = function (x) {
           x *= zoom;
           return x | 0; // round
         }
 		
-		ctx.fillStyle = clear ? 'black' : 'red';
-		astroids.draw(ctx, c);
-		ctx.fillStyle = clear ? 'black' : 'white';
+		if (!clear)ctx.fillStyle = "rgb(1, 0, 1)";
+		if (!clear) astroids.draw();
+		ctx.fillStyle = clear ? 'rgba(0,0,0,0)' : 'white';
         ctx.fillRect(c(player.pos.x - 5),c(player.pos.y - 5),
-                     c(10), c(10));
+                    c(10), c(10));
       }
     </script>
     <style type="text/css">
@@ -321,7 +363,7 @@
         position: relative;
       }
 
-      #canvas {
+      canvas {
         position: absolute;
         top: 0px;
         left:0px;
@@ -362,10 +404,14 @@
   </head>
   <body onload="init()">
     <div class="game">
-      <canvas id="canvas"></canvas>
+		<canvas id="canvas"></canvas>
+	  <canvas id="2d"></canvas>
       <div id="score">START</div>
 	  <div id="life">3❤</div>
       <div id="wait"></div>
     </div>
+	<div style="display:none">
+		<img id="astroid1" src="assets/astroids/large/a10000.png" />
+	</div>
   </body>
 </html>
