@@ -25,6 +25,7 @@
 	  var scene;
 	  const astroidImages = [];
       const mProjection = [1.0722534656524658, 0, 0, 0, 0, 2.1445069313049316, 0, 0, 0, 0, -1, -1, 0, 0, 0, 0];
+	  mat4.perspective(mProjection, 45 * Math.PI / 180, 2, 0, 20);
 	  var gl;
 	  var gl_c;
 	  function project(p, m = mProjection) {
@@ -59,8 +60,9 @@
 
       }
 	  function onAMessage(device_id, data) {
-		  if (airconsole.getActivePlayerDeviceIds().length === 0) return;
-          var p_id = airconsole.convertDeviceIdToPlayerNumber(device_id);
+		  // if (airconsole.getActivePlayerDeviceIds().length === 0) return;
+          // var p_id = airconsole.convertDeviceIdToPlayerNumber(device_id);
+		  var p_id = device_id;
           if (p_id != undefined){
 			if(data.move !== undefined) {
 				if (startTime === null) startGame();
@@ -200,9 +202,9 @@
 					vec3.set(v, this.r /2.0, this.r / 2.0, 1);
 					mat4.targetTo(mView, [player.pos.x, player.pos.y, player.pos.z], [this.pos.x, this.pos.y, this.pos.z], [0, 1, 0]);
 					mat4.fromScaling(mView, v);
-					mat4.translate(mView, mView, [this.pos.x - px, -(this.pos.y - py), -this.pos.z]);
+					mat4.translate(mView, mView, [(this.pos.x - px) / this.r, -(this.pos.y - py) / this.r, -this.pos.z ]);
 					prog.draw(mProjection, mView);
-					ctx.fillStyle = "rgba(255, 0, 0, " + (1.0 - this.pos.z)+ ")";
+					ctx.fillStyle = "rgba(255, 0, 0, " + (1.0 - this.pos.z / 20.0)+ ")";
 					ctx.fillRect(c(this.pos.x * 100 + 100 - this.r * 100), c(this.pos.y * 50 + 50 - this.r*100), c(this.r * 100 * 2), c(this.r * 100 * 2));
 			}
 		}
@@ -234,7 +236,7 @@
 				console.log("new astroid");
 				const x = Math.random() * 2.0 - 1.0;
 				const y = Math.random() - 0.5;
-				astroids.add(new Astroid(30, {x: x, y: y, z: 1}, {x: 0, y: 0, z: -0.2}, 0));
+				astroids.add(new Astroid(30, {x: x, y: y, z: 20}, {x: 0, y: 0, z: -2}, 0));
 			},
 			astroids: astroids,
 		};
@@ -400,6 +402,15 @@
         font-size: 24px;
         color: lime;
       }
+	  #aim {
+		position: absolute;
+		width: 48px;
+		height: 48px;
+		top: 50%;
+		left: 50%;
+		margin-top: -24px;
+		margin-left: -24px;
+	  }
     </style>
   </head>
   <body onload="init()">
@@ -409,6 +420,7 @@
       <div id="score">START</div>
 	  <div id="life">3❤</div>
       <div id="wait"></div>
+	  <img id="aim" src="assets/aim.png"></img>
     </div>
 	<div style="display:none">
 		<img id="astroid1" src="assets/astroids/large/a10000.png" />
